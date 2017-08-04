@@ -1,10 +1,16 @@
 import platform
-import os
 import json
 import re
 import sys
 import argparse
-from utils import watchdog
+import thread
+import subprocess
+
+
+from socketIO_client import SocketIO, LoggingNamespace
+
+from net import net
+from utils import Every, watchdog, times
 from audio.audio import Audio
 
 audio = Audio()
@@ -49,6 +55,22 @@ secondsToDischarge = 60 * 3
 server = "runmyrobot.com"
 #server = "52.52.213.92"
 
+if commandArgs.env == 'dev':
+    print 'DEV MODE ***************'
+    print "using dev port 8122"
+    port = 8122
+elif commandArgs.env == 'prod':
+    print 'PROD MODE *************'
+    print "using prod port 8022"
+    port = 8022
+else:
+    print "invalid environment"
+    sys.exit(0)
+
+print 'using socket io to connect to', server
+socketIO = SocketIO(server, port, LoggingNamespace)
+print 'finished using socket io to connect to', server
+
 # motor controller specific intializations
 if commandArgs.type == 'none':
     pass
@@ -88,11 +110,6 @@ else:
     print "invalid --type in command line"
     exit(0)
 
-import thread
-import subprocess
-import datetime
-from socketIO_client import SocketIO, LoggingNamespace
-
 chargeIONumber = 17
 
 #LED controlling
@@ -117,24 +134,7 @@ turningSpeedActuallyUsed = 250
 dayTimeDrivingSpeedActuallyUsed = commandArgs.day_speed
 nightTimeDrivingSpeedActuallyUsed = commandArgs.night_speed
 
-if commandArgs.env == 'dev':
-    print 'DEV MODE ***************'
-    print "using dev port 8122"
-    port = 8122
-elif commandArgs.env == 'prod':
-    print 'PROD MODE *************'
-    print "using prod port 8022"
-    port = 8022
-else:
-    print "invalid environment"
-    sys.exit(0)
 
-print 'using socket io to connect to', server
-socketIO = SocketIO(server, port, LoggingNamespace)
-print 'finished using socket io to connect to', server
-
-def times(lst, number):
-    return [x*number for x in lst]
 
 def handle_exclusive_control(args):
         if 'status' in args and 'robot_id' in args and args['robot_id'] == commandArgs.robot_id:
@@ -250,8 +250,6 @@ elif platform.system() == 'Linux':
 
 lastInternetStatus = False
 
-from utils.every import Every
-
 everyChargeCheck = Every(chargeCheckInterval)
 every10 = Every(10)
 every60 = Every(60)
@@ -280,7 +278,7 @@ while True:
             motor.sendChargeState()
 
     if every1000:
-        internetStatus = isInternetConnected()
+        internetStatus = net.isInternetConnected()
         if internetStatus != lastInternetStatus:
             if internetStatus:
                 tts.say("ok")

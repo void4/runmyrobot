@@ -1,5 +1,8 @@
-import RPi.GPIO as GPIO
+import datetime
 import atexit
+
+import RPi.GPIO as GPIO
+
 from ..utils.every import Every
 
 # every60 = Every(60) (not guaranteed, unless command is issued)
