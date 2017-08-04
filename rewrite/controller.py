@@ -8,16 +8,26 @@ import subprocess
 
 parser = argparse.ArgumentParser(description='start robot control program')
 parser.add_argument('robot_id', help='Robot ID')
+
 parser.add_argument('--env', help="Environment for example dev or prod, prod is default", default='prod')
+
 parser.add_argument('--type', help="serial or motor_hat or gopigo2 or gopigo3 or l298n or motozero or pololu", default='motor_hat')
 parser.add_argument('--serial-device', help="serial device", default='/dev/ttyACM0')
+
+parser.add_argument('--tts-volume', type=int, default=80)
 parser.add_argument('--male', dest='male', action='store_true')
 parser.add_argument('--female', dest='male', action='store_false')
 parser.add_argument('--voice-number', type=int, default=1)
+parser.add_argument('--festival-tts', dest='festival_tts', action='store_true')
+parser.set_defaults(festival_tts=False)
+parser.add_argument('--no-anon-tts', dest='anon_tts', action='store_false')
+parser.set_defaults(anon_tts=True)
+parser.add_argument('--filter-url-tts', dest='filter_url_tts', action='store_true')
+parser.set_defaults(filter_url_tts=False)
+
 parser.add_argument('--led', help="Type of LED for example max7219", default=None)
 parser.add_argument('--ledrotate', help="Rotates the LED matrix. Example: 180", default=None)
-parser.add_argument('--tts-volume', type=int, default=80)
-parser.add_argument('--secret-key', default=None)
+
 parser.add_argument('--turn-delay', type=float, default=0.4)
 parser.add_argument('--straight-delay', type=float, default=0.5)
 parser.add_argument('--driving-speed', type=int, default=90)
@@ -25,16 +35,13 @@ parser.add_argument('--day-speed', type=int, default=255)
 parser.add_argument('--night-speed', type=int, default=255)
 parser.add_argument('--forward', default='[-1,1,-1,1]')
 parser.add_argument('--left', default='[1,1,1,1]')
-parser.add_argument('--festival-tts', dest='festival_tts', action='store_true')
-parser.set_defaults(festival_tts=False)
+
 parser.add_argument('--auto-wifi', dest='auto_wifi', action='store_true')
 parser.set_defaults(auto_wifi=False)
-parser.add_argument('--no-anon-tts', dest='anon_tts', action='store_false')
-parser.set_defaults(anon_tts=True)
-parser.add_argument('--filter-url-tts', dest='filter_url_tts', action='store_true')
-parser.set_defaults(filter_url_tts=False)
+parser.add_argument('--secret-key', default=None)
+
 commandArgs = parser.parse_args()
-print commandArgs
+print(commandArgs)
 
 from socketIO_client import SocketIO, LoggingNamespace
 
@@ -49,20 +56,20 @@ server = "runmyrobot.com"
 #server = "52.52.213.92"
 
 if commandArgs.env == 'dev':
-    print 'DEV MODE ***************'
-    print "using dev port 8122"
+    print('DEV MODE ***************')
+    print("using dev port 8122")
     port = 8122
 elif commandArgs.env == 'prod':
-    print 'PROD MODE *************'
-    print "using prod port 8022"
+    print('PROD MODE *************')
+    print("using prod port 8022")
     port = 8022
 else:
-    print "invalid environment"
+    print("invalid environment")
     sys.exit(0)
 
-print 'using socket io to connect to', server
+print('using socket io to connect to', server)
 socketIO = SocketIO(server, port, LoggingNamespace)
-print 'finished using socket io to connect to', server
+print('finished using socket io to connect to', server)
 
 # motor controller specific intializations
 
@@ -145,7 +152,6 @@ handlingCommand = False
 
 def handle_exclusive_control(args):
         if 'status' in args and 'robot_id' in args and args['robot_id'] == commandArgs.robot_id:
-
             status = args['status']
 
         if status == 'start':
@@ -180,7 +186,7 @@ def handle_command(args):
         global handlingCommand
 
         if 'robot_id' in args and args['robot_id'] == commandArgs.robot_id:
-            print "received message:", args
+            print("received message:", args)
         # Note: If you are adding features to your bot,
         # you can get direct access to incomming commands right here.
 
@@ -208,13 +214,13 @@ def handleStartReverseSshProcess(args):
     print "starting reverse ssh"
     socketIO.emit("reverse_ssh_info", "starting")
     returnCode = subprocess.call(["/usr/bin/ssh", "-X", "-i", "/home/pi/reverse_ssh_key1.pem", "-N", "-R", "2222:localhost:22", "ubuntu@52.52.204.174"])
-    socketIO.emit("reverse_ssh_info", "return code: " + str(returnCode))
-    print "reverse ssh process has exited with code", str(returnCode)
+    socketIO.emit("reverse_ssh_info", "return code: %s" % str(returnCode))
+    print("reverse ssh process has exited with code %s" % str(returnCode))
 
 def handleEndReverseSshProcess(args):
-    print "handling end reverse ssh process"
+    print("handling end reverse ssh process")
     resultCode = subprocess.call(["killall", "ssh"])
-    print "result code of killall ssh:", resultCode
+    print("result code of killall ssh: %s", str(resultCode))
 
 def on_handle_command(*args):
    thread.start_new_thread(handle_command, args)
