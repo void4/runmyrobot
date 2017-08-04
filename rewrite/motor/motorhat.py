@@ -4,7 +4,7 @@ import atexit
 import RPi.GPIO as GPIO
 
 from ..utils.every import Every
-
+chargeIONumber = 17
 # every60 = Every(60) (not guaranteed, unless command is issued)
 
 try:

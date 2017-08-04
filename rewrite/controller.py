@@ -6,13 +6,14 @@ import argparse
 import thread
 import subprocess
 
-
 from socketIO_client import SocketIO, LoggingNamespace
 
 from net import net
+from charge import charge
 from utils import Every, watchdog, times
 from audio.audio import Audio
 
+watchdog()
 audio = Audio()
 
 parser = argparse.ArgumentParser(description='start robot control program')
@@ -46,11 +47,6 @@ commandArgs = parser.parse_args()
 print commandArgs
 
 audio.init(commandArgs.tts_volume)
-
-chargeCheckInterval = 1
-chargeValue = 0.0
-secondsToCharge = 60 * 2
-secondsToDischarge = 60 * 3
 
 server = "runmyrobot.com"
 #server = "52.52.213.92"
@@ -110,8 +106,6 @@ else:
     print "invalid --type in command line"
     exit(0)
 
-chargeIONumber = 17
-
 #LED controlling
 if commandArgs.led == 'max7219':
     from led.max7219 import Max7219
@@ -120,12 +114,6 @@ if commandArgs.led == 'max7219':
 elif commandArgs.led is not None:
     print("%s not yet supported!" % commandArgs.led)
 
-steeringSpeed = 90
-steeringHoldingSpeed = 90
-
-global drivingSpeed
-
-#drivingSpeed = 90
 drivingSpeed = commandArgs.driving_speed
 handlingCommand = False
 
@@ -133,8 +121,6 @@ handlingCommand = False
 turningSpeedActuallyUsed = 250
 dayTimeDrivingSpeedActuallyUsed = commandArgs.day_speed
 nightTimeDrivingSpeedActuallyUsed = commandArgs.night_speed
-
-
 
 def handle_exclusive_control(args):
         if 'status' in args and 'robot_id' in args and args['robot_id'] == commandArgs.robot_id:
@@ -161,13 +147,13 @@ def handle_chat_message(args):
     message = "".join(withoutName)
     urlRegExp = "(http|ftp|https)://([\w_-]+(?:(?:\.[\w_-]+)+))([\w.,@?^=%&:/~+#-]*[\w@?^=%&/~+#-])?"
     if message[1] == ".":
-       exit()
+        exit()
     elif commandArgs.anon_tts != True and args['anonymous'] == True:
-       exit()
+        exit()
     elif commandArgs.filter_url_tts == True and re.search(urlRegExp, message):
-       exit()
+        exit()
     else:
-          tts.say(message)
+        tts.say(message)
 
 def handle_command(args):
         global handlingCommand
@@ -246,10 +232,10 @@ if platform.system() == 'Darwin':
     pass
     #ipInfoUpdate()
 elif platform.system() == 'Linux':
-    ipInfoUpdate()
+    net.ipInfoUpdate()
 
 lastInternetStatus = False
-
+chargeCheckInterval = 1
 everyChargeCheck = Every(chargeCheckInterval)
 every10 = Every(10)
 every60 = Every(60)
@@ -260,19 +246,19 @@ while True:
 
     if everyChargeCheck:
         print "hello"
-        updateChargeApproximation()
+        charge.updateChargeApproximation()
 
     if every10:
         if commandArgs.auto_wifi:
             if commandArgs.secret_key is not None:
-                configWifiLogin(commandArgs.secret_key)
+                net.configWifiLogin(commandArgs.secret_key)
 
     if every60:
         # tell the server what robot id is using this connection
         identifyRobotId()
 
         if platform.system() == 'Linux':
-            ipInfoUpdate()
+            net.ipInfoUpdate()
 
         if commandArgs.type == 'motor_hat':
             motor.sendChargeState()

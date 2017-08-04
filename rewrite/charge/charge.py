@@ -1,4 +1,9 @@
+import getpass
 
+
+chargeValue = 0.0
+secondsToCharge = 60 * 2
+secondsToDischarge = 60 * 3
 
 def updateChargeApproximation():
 
