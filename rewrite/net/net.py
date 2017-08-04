@@ -1,3 +1,5 @@
+import subprocess
+
 WPA_FILE_TEMPLATE = """ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
 update_config=1
 country=GB
@@ -23,7 +25,7 @@ def isInternetConnected():
     except urllib2.URLError as err:
         return False
 
-def ipInfoUpdate():
+def ipInfoUpdate(socketIO):
     socketIO.emit('ip_information',
                   {'ip': subprocess.check_output(["hostname", "-I"]), 'robot_id': robotID})
 

@@ -1,10 +1,20 @@
 import datetime
 import atexit
+import getpass
+import os
 
 import RPi.GPIO as GPIO
 
-from ..utils.every import Every
+from ..utils import Every
+from motor import Motor
+
+chargeValue = 0.0
+secondsToCharge = 60 * 2
+secondsToDischarge = 60 * 3
+
+
 chargeIONumber = 17
+turningSpeedActuallyUsed = 250
 # every60 = Every(60) (not guaranteed, unless command is issued)
 
 try:
@@ -110,8 +120,13 @@ if commandArgs.type == 'motor_hat':
     GPIO.add_event_detect(chargeIONumber, GPIO.BOTH)
     GPIO.add_event_callback(chargeIONumber, sendChargeStateCallback)
 
-class MotorHat:
-    def __init__(self, forward, backward, left, right, straightDelay, turnDelay):
+class MotorHat(Motor):
+    def __init__(self, drivingSpeed, daySpeed, nightSpeed, forward, backward, left, right, straightDelay, turnDelay):
+
+        self.drivingSpeed = drivingSpeed
+        self.daySpeed = daySpeed
+        self.nightSpeed = nightSpeed
+
         self.forward = forward
         self.backward = backward
         self.left = left
@@ -185,3 +200,37 @@ class MotorHat:
                 time.sleep(0.05)
 
         turnOffMotors()
+
+    def updateChargeApproximation(self):
+
+        username = getpass.getuser()
+        path = "/tmp/charge_state_%s.txt" % username
+
+        # read charge value
+        # assume it is zero if no file exists
+        if os.path.isfile(path):
+            file = open(path, 'r')
+            chargeValue = float(file.read())
+            file.close()
+        else:
+            chargeValue = 0
+
+        chargePerSecond = 1.0 / secondsToCharge
+        dischargePerSecond = 1.0 / secondsToDischarge
+
+        if isCharging():
+            chargeValue += 100.0 * chargePerSecond * chargeCheckInterval
+        else:
+            chargeValue -= 100.0 * dischargePerSecond * chargeCheckInterval
+
+        if chargeValue > 100.0:
+            chargeValue = 100.0
+        if chargeValue < 0:
+            chargeValue = 0.0
+
+        # write new charge value
+        file = open(path, 'w')
+        file.write(str(chargeValue))
+        file.close()
+
+        print "charge value updated to", chargeValue

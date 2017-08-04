@@ -1,6 +1,7 @@
 from Adafruit_PWM_Servo_Driver import PWM
+from motor import Motor
 
-class AdafruitPWM:
+class AdafruitPWM(Motor):
     def __init__(self):
         # Initialise the PWM device
         pwm = PWM(0x40)

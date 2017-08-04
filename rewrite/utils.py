@@ -23,6 +23,5 @@ def watchdog():
     os.system("sudo modprobe bcm2835_wdt")
     os.system("sudo /usr/sbin/service watchdog start")
 
-
 def times(lst, number):
     return [x*number for x in lst]

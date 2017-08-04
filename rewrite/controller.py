@@ -9,12 +9,8 @@ import subprocess
 from socketIO_client import SocketIO, LoggingNamespace
 
 from net import net
-from charge import charge
 from utils import Every, watchdog, times
 from audio.audio import Audio
-
-watchdog()
-audio = Audio()
 
 parser = argparse.ArgumentParser(description='start robot control program')
 parser.add_argument('robot_id', help='Robot ID')
@@ -46,7 +42,8 @@ parser.set_defaults(filter_url_tts=False)
 commandArgs = parser.parse_args()
 print commandArgs
 
-audio.init(commandArgs.tts_volume)
+watchdog()
+audio = Audio(commandArgs.tts_volume)
 
 server = "runmyrobot.com"
 #server = "52.52.213.92"
@@ -68,8 +65,10 @@ socketIO = SocketIO(server, port, LoggingNamespace)
 print 'finished using socket io to connect to', server
 
 # motor controller specific intializations
+
 if commandArgs.type == 'none':
-    pass
+    from motor.motor import Motor
+    motor = Motor()
 elif commandArgs.type == 'motor_hat':
     from motor.motorhat import MotorHat
     forward = json.loads(commandArgs.forward)
@@ -78,7 +77,7 @@ elif commandArgs.type == 'motor_hat':
     right = times(left, -1)
     straightDelay = commandArgs.straight_delay
     turnDelay = commandArgs.turn_delay
-    motor = MotorHat(forward, backward, left, right, straightDelay, turnDelay)
+    motor = MotorHat(commandArgs.driving_speed, commandArgs.day_speed, commandArgs.night_speed, forward, backward, left, right, straightDelay, turnDelay)
 elif commandArgs.type == 'gopigo2':
     from motor.gopigo2 import GoPiGo2
     motor = GoPiGo2()
@@ -114,13 +113,7 @@ if commandArgs.led == 'max7219':
 elif commandArgs.led is not None:
     print("%s not yet supported!" % commandArgs.led)
 
-drivingSpeed = commandArgs.driving_speed
 handlingCommand = False
-
-# Marvin
-turningSpeedActuallyUsed = 250
-dayTimeDrivingSpeedActuallyUsed = commandArgs.day_speed
-nightTimeDrivingSpeedActuallyUsed = commandArgs.night_speed
 
 def handle_exclusive_control(args):
         if 'status' in args and 'robot_id' in args and args['robot_id'] == commandArgs.robot_id:
@@ -205,7 +198,6 @@ def on_handle_exclusive_control(*args):
 def on_handle_chat_message(*args):
    thread.start_new_thread(handle_chat_message, args)
 
-#from communication import socketIO
 socketIO.on('command_to_robot', on_handle_command)
 socketIO.on('exclusive_control', on_handle_exclusive_control)
 socketIO.on('chat_message_with_name', on_handle_chat_message)
@@ -219,20 +211,8 @@ def endReverseSshProcess(*args):
 socketIO.on('reverse_ssh_8872381747239', startReverseSshProcess)
 socketIO.on('end_reverse_ssh_8872381747239', endReverseSshProcess)
 
-def myWait():
-  socketIO.wait()
-  thread.start_new_thread(myWait, ())
-
 def identifyRobotId():
     socketIO.emit('identify_robot_id', commandArgs.robot_id);
-
-identifyRobotId()
-
-if platform.system() == 'Darwin':
-    pass
-    #ipInfoUpdate()
-elif platform.system() == 'Linux':
-    net.ipInfoUpdate()
 
 lastInternetStatus = False
 chargeCheckInterval = 1
@@ -242,11 +222,10 @@ every60 = Every(60)
 every1000 = Every(1000)
 
 while True:
-    socketIO.wait(seconds=1)
 
-    if everyChargeCheck:
+    if motor and everyChargeCheck:
         print "hello"
-        charge.updateChargeApproximation()
+        motor.updateChargeApproximation()
 
     if every10:
         if commandArgs.auto_wifi:
@@ -258,7 +237,8 @@ while True:
         identifyRobotId()
 
         if platform.system() == 'Linux':
-            net.ipInfoUpdate()
+            socketIO.emit('ip_information',
+                      {'ip': subprocess.check_output(["hostname", "-I"]), 'robot_id': commandArgs.robot_id})
 
         if commandArgs.type == 'motor_hat':
             motor.sendChargeState()
@@ -271,3 +251,5 @@ while True:
             else:
                 tts.say("missing internet connection")
         lastInternetStatus = internetStatus
+
+    socketIO.wait(seconds=1)
