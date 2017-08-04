@@ -6,12 +6,6 @@ import argparse
 import thread
 import subprocess
 
-from socketIO_client import SocketIO, LoggingNamespace
-
-from net import net
-from utils import Every, watchdog, times
-from audio.audio import Audio
-
 parser = argparse.ArgumentParser(description='start robot control program')
 parser.add_argument('robot_id', help='Robot ID')
 parser.add_argument('--env', help="Environment for example dev or prod, prod is default", default='prod')
@@ -42,6 +36,12 @@ parser.set_defaults(filter_url_tts=False)
 commandArgs = parser.parse_args()
 print commandArgs
 
+from socketIO_client import SocketIO, LoggingNamespace
+
+from net import net
+from utils import Every, watchdog, times
+from audio.audio import Audio
+
 watchdog()
 audio = Audio(commandArgs.tts_volume)
 
@@ -66,9 +66,14 @@ print 'finished using socket io to connect to', server
 
 # motor controller specific intializations
 
+modules = []
+
 if commandArgs.type == 'none':
     from motor.motor import Motor
-    motor = Motor()
+    modules.append(Motor())
+elif commandArgs.type == "dummy":
+    from motor.motor import DummyMotor
+    modules.append(DummyMotor())
 elif commandArgs.type == 'motor_hat':
     from motor.motorhat import MotorHat
     forward = json.loads(commandArgs.forward)
@@ -77,39 +82,62 @@ elif commandArgs.type == 'motor_hat':
     right = times(left, -1)
     straightDelay = commandArgs.straight_delay
     turnDelay = commandArgs.turn_delay
-    motor = MotorHat(commandArgs.driving_speed, commandArgs.day_speed, commandArgs.night_speed, forward, backward, left, right, straightDelay, turnDelay)
+    modules.append(MotorHat(commandArgs.driving_speed, commandArgs.day_speed, commandArgs.night_speed, forward, backward, left, right, straightDelay, turnDelay))
 elif commandArgs.type == 'gopigo2':
     from motor.gopigo2 import GoPiGo2
-    motor = GoPiGo2()
+    modules.append(GoPiGo2())
 elif commandArgs.type == 'gopigo3':
     from motor.gopigo3 import GoPiGo3
-    motor = GoPiGo3()
+    modules.append(GoPiGo3())
 elif commandArgs.type == 'l298n':
     from motor.l298n import L298N
-    motor = L298N()
+    modules.append(L298N())
 elif commandArgs.type == 'motozero':
     from motor.motozero import MotoZero
-    motor = MotoZero()
+    modules.append(MotoZero())
 elif commandArgs.type == 'pololu':
     from motor.pololu import Pololu
-    motor = Pololu()
+    modules.append(Pololu())
 elif commandArgs.type == 'screencap':
     pass
 elif commandArgs.type == 'adafruit_pwm':
     from motor.adafruitpwm import AdafruitPWM
-    motor = AdafruitPWM()
+    modules.append(AdafruitPWM())
 elif commandArgs.type == 'serial':
     from motor.motorserial import Serial
-    motor = Serial(commandArgs.serial_device)
+    modules.append(Serial(commandArgs.serial_device))
 else:
     print "invalid --type in command line"
     exit(0)
+
+uistring = [{"button_panels": []}]
+
+responses = []
+for module in modules:
+    response = module.ui()
+
+    if not response:
+        continue
+    elif isinstance(response, str):
+        response = json.loads(response)
+    elif not isinstance(response, dict):
+        print("Module", module, "returned invalid response")
+        continue
+
+    responses.append(response)
+
+from ui import setCustomUI
+if responses:
+    uistring[0]["button_panels"] += responses
+    print(uistring)
+    setCustomUI(commandArgs.robot_id, uistring)
 
 #LED controlling
 if commandArgs.led == 'max7219':
     from led.max7219 import Max7219
     led = Max7219()
     led.off()
+    modules.append(led)
 elif commandArgs.led is not None:
     print("%s not yet supported!" % commandArgs.led)
 
@@ -169,10 +197,9 @@ def handle_command(args):
 
             if command == 'LOUD':
                 thread.start_new_thread(audio.changeVolumeHighThenNormal, ())
-            elif commandArgs.led == 'max7219':
-                led.run(command)
-            else:
-                motor.run(command)
+
+            for module in modules:
+                module.run(command)
             #setMotorsToIdle()
 
         handlingCommand = False
@@ -223,9 +250,8 @@ every1000 = Every(1000)
 
 while True:
 
-    if motor and everyChargeCheck:
-        print "hello"
-        motor.updateChargeApproximation()
+    #if motor and everyChargeCheck:
+    #    motor.updateChargeApproximation()
 
     if every10:
         if commandArgs.auto_wifi:
@@ -240,8 +266,8 @@ while True:
             socketIO.emit('ip_information',
                       {'ip': subprocess.check_output(["hostname", "-I"]), 'robot_id': commandArgs.robot_id})
 
-        if commandArgs.type == 'motor_hat':
-            motor.sendChargeState()
+        #if commandArgs.type == 'motor_hat':
+        #    motor.sendChargeState()
 
     if every1000:
         internetStatus = net.isInternetConnected()
@@ -252,4 +278,4 @@ while True:
                 tts.say("missing internet connection")
         lastInternetStatus = internetStatus
 
-    socketIO.wait(seconds=1)
+    socketIO.wait(seconds=0.5)
