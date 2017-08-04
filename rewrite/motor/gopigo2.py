@@ -1,0 +1,22 @@
+import gopigo
+
+class GoPiGo2:
+    def __init__(self):
+
+    def run(self, command):
+        if command == 'L':
+            gopigo.left_rot()
+            time.sleep(0.15)
+            gopigo.stop()
+        elif command == 'R':
+            gopigo.right_rot()
+            time.sleep(0.15)
+            gopigo.stop()
+        elif command == 'F':
+            gopigo.forward()
+            time.sleep(0.35)
+            gopigo.stop()
+        elif command == 'B':
+            gopigo.backward()
+            time.sleep(0.35)
+            gopigo.stop()
