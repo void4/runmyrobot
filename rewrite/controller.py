@@ -1,15 +1,13 @@
 import platform
 import os
-import uuid
-import urllib2
 import json
-import traceback
-import tempfile
 import re
-import getpass
 import sys
 import argparse
-#import configparser
+from utils import watchdog
+from audio.audio import Audio
+
+audio = Audio()
 
 parser = argparse.ArgumentParser(description='start robot control program')
 parser.add_argument('robot_id', help='Robot ID')
@@ -41,22 +39,12 @@ parser.set_defaults(filter_url_tts=False)
 commandArgs = parser.parse_args()
 print commandArgs
 
+audio.init(commandArgs.tts_volume)
+
 chargeCheckInterval = 1
 chargeValue = 0.0
-secondsToCharge = 60 * 2  # value in seconds
-secondsToDischarge = 60 * 3 # value in seconds
-
-# watch dog timer
-os.system("sudo modprobe bcm2835_wdt")
-os.system("sudo /usr/sbin/service watchdog start")
-
-# set volume level
-# tested for 3.5mm audio jack
-if commandArgs.tts_volume > 50:
-    os.system("amixer set PCM -- -100")
-
-# tested for USB audio device
-os.system("amixer -c 2 cset numid=3 %d%%" % commandArgs.tts_volume)
+secondsToCharge = 60 * 2
+secondsToDischarge = 60 * 3
 
 server = "runmyrobot.com"
 #server = "52.52.213.92"
@@ -64,11 +52,15 @@ server = "runmyrobot.com"
 # motor controller specific intializations
 if commandArgs.type == 'none':
     pass
-elif commandArgs.type == 'serial':
-    import serial
 elif commandArgs.type == 'motor_hat':
     from motor.motorhat import MotorHat
-    motor = MotorHat()
+    forward = json.loads(commandArgs.forward)
+    backward = times(forward, -1)
+    left = json.loads(commandArgs.left)
+    right = times(left, -1)
+    straightDelay = commandArgs.straight_delay
+    turnDelay = commandArgs.turn_delay
+    motor = MotorHat(forward, backward, left, right, straightDelay, turnDelay)
 elif commandArgs.type == 'gopigo2':
     from motor.gopigo2 import GoPiGo2
     motor = GoPiGo2()
@@ -89,8 +81,6 @@ elif commandArgs.type == 'screencap':
 elif commandArgs.type == 'adafruit_pwm':
     from motor.adafruitpwm import AdafruitPWM
     motor = AdafruitPWM()
-elif commandArgs.type == 'owi_arm':
-    import owi_arm
 elif commandArgs.type == 'serial':
     from motor.motorserial import Serial
     motor = Serial(commandArgs.serial_device)
@@ -98,16 +88,12 @@ else:
     print "invalid --type in command line"
     exit(0)
 
-import time
-import atexit
-import sys
 import thread
 import subprocess
 import datetime
 from socketIO_client import SocketIO, LoggingNamespace
 
 chargeIONumber = 17
-robotID = commandArgs.robot_id
 
 #LED controlling
 if commandArgs.led == 'max7219':
@@ -131,18 +117,6 @@ turningSpeedActuallyUsed = 250
 dayTimeDrivingSpeedActuallyUsed = commandArgs.day_speed
 nightTimeDrivingSpeedActuallyUsed = commandArgs.night_speed
 
-# Note if you'd like more debug output you can instead run:
-#pwm = PWM(0x40, debug=True)
-servoMin = [150, 150, 130]  # Min pulse length out of 4096
-servoMax = [600, 600, 270]  # Max pulse length out of 4096
-armServo = [300, 300, 300]
-
-#def setMotorsToIdle():
-#    s = 65
-#    for i in range(1, 2):
-#        mh.getMotor(i).setSpeed(s)
-#        mh.getMotor(i).run(Adafruit_MotorHAT.FORWARD)
-
 if commandArgs.env == 'dev':
     print 'DEV MODE ***************'
     print "using dev port 8122"
@@ -159,40 +133,11 @@ print 'using socket io to connect to', server
 socketIO = SocketIO(server, port, LoggingNamespace)
 print 'finished using socket io to connect to', server
 
-def setServoPulse(channel, pulse):
-  pulseLength = 1000000                   # 1,000,000 us per second
-  pulseLength /= 60                       # 60 Hz
-  print "%d us per period" % pulseLength
-  pulseLength /= 4096                     # 12 bits of resolution
-  print "%d us per bit" % pulseLength
-  pulse *= 1000
-  pulse /= pulseLength
-  pwm.setPWM(channel, 0, pulse)
-
-def incrementArmServo(channel, amount):
-
-    armServo[channel] += amount
-
-    print "arm servo positions:", armServo
-
-    if armServo[channel] > servoMax[channel]:
-        armServo[channel] = servoMax[channel]
-    if armServo[channel] < servoMin[channel]:
-        armServo[channel] = servoMin[channel]
-    pwm.setPWM(channel, 0, armServo[channel])
-
 def times(lst, number):
     return [x*number for x in lst]
 
-forward = json.loads(commandArgs.forward)
-backward = times(forward, -1)
-left = json.loads(commandArgs.left)
-right = times(left, -1)
-straightDelay = commandArgs.straight_delay
-turnDelay = commandArgs.turn_delay
-
 def handle_exclusive_control(args):
-        if 'status' in args and 'robot_id' in args and args['robot_id'] == robotID:
+        if 'status' in args and 'robot_id' in args and args['robot_id'] == commandArgs.robot_id:
 
             status = args['status']
 
@@ -224,29 +169,11 @@ def handle_chat_message(args):
     else:
           tts.say(message)
 
-def changeVolumeHighThenNormal():
-
-    os.system("amixer -c 2 cset numid=3 %d%%" % 100)
-    time.sleep(25)
-    os.system("amixer -c 2 cset numid=3 %d%%" % commandArgs.tts_volume)
-
-def handleLoudCommand():
-    thread.start_new_thread(changeVolumeHighThenNormal, ())
-
 def handle_command(args):
-        now = datetime.datetime.now()
-        now_time = now.time()
-        # if it's late, make the robot slower
-        if now_time >= datetime.time(21,30) or now_time <= datetime.time(9,30):
-            #print "within the late time interval"
-            drivingSpeedActuallyUsed = nightTimeDrivingSpeedActuallyUsed
-        else:
-            drivingSpeedActuallyUsed = dayTimeDrivingSpeedActuallyUsed
-
-        global drivingSpeed
         global handlingCommand
 
-        if 'robot_id' in args and args['robot_id'] == robotID: print "received message:", args
+        if 'robot_id' in args and args['robot_id'] == commandArgs.robot_id:
+            print "received message:", args
         # Note: If you are adding features to your bot,
         # you can get direct access to incomming commands right here.
 
@@ -255,24 +182,14 @@ def handle_command(args):
 
         handlingCommand = True
 
-        #if 'robot_id' in args:
-        #    print "args robot id:", args['robot_id']
-
-        #if 'command' in args:
-        #    print "args command:", args['command']
-
-        if 'command' in args and 'robot_id' in args and args['robot_id'] == robotID:
+        if 'command' in args and 'robot_id' in args and args['robot_id'] == commandArgs.robot_id:
 
             print('got command', args)
 
             command = args['command']
 
             if command == 'LOUD':
-                handleLoudCommand()
-
-
-            if commandArgs.type == 'serial':
-                sendSerialCommand(command)
+                thread.start_new_thread(audio.changeVolumeHighThenNormal, ())
             elif commandArgs.led == 'max7219':
                 led.run(command)
             else:
@@ -287,7 +204,6 @@ def handleStartReverseSshProcess(args):
     returnCode = subprocess.call(["/usr/bin/ssh", "-X", "-i", "/home/pi/reverse_ssh_key1.pem", "-N", "-R", "2222:localhost:22", "ubuntu@52.52.204.174"])
     socketIO.emit("reverse_ssh_info", "return code: " + str(returnCode))
     print "reverse ssh process has exited with code", str(returnCode)
-
 
 def handleEndReverseSshProcess(args):
     print "handling end reverse ssh process"
@@ -322,7 +238,7 @@ def myWait():
   thread.start_new_thread(myWait, ())
 
 def identifyRobotId():
-    socketIO.emit('identify_robot_id', robotID);
+    socketIO.emit('identify_robot_id', commandArgs.robot_id);
 
 identifyRobotId()
 
@@ -331,7 +247,6 @@ if platform.system() == 'Darwin':
     #ipInfoUpdate()
 elif platform.system() == 'Linux':
     ipInfoUpdate()
-
 
 lastInternetStatus = False
 
@@ -344,7 +259,6 @@ every1000 = Every(1000)
 
 while True:
     socketIO.wait(seconds=1)
-
 
     if everyChargeCheck:
         print "hello"
@@ -363,7 +277,7 @@ while True:
             ipInfoUpdate()
 
         if commandArgs.type == 'motor_hat':
-            sendChargeState()
+            motor.sendChargeState()
 
     if every1000:
         internetStatus = isInternetConnected()

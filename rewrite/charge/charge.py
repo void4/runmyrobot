@@ -1,9 +1,4 @@
-# true if it's on the charger and it needs to be charging
-def isCharging():
-    if chargeValue < 99:
-        return GPIO.input(chargeIONumber) == 1
-    else:
-        return False
+
 
 def updateChargeApproximation():
 

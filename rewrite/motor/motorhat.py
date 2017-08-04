@@ -1,5 +1,8 @@
 import RPi.GPIO as GPIO
 import atexit
+from ..utils.every import Every
+
+# every60 = Every(60) (not guaranteed, unless command is issued)
 
 try:
     from Adafruit_MotorHAT import Adafruit_MotorHAT, Adafruit_DCMotor
@@ -33,6 +36,40 @@ if motorsEnabled:
     mh = Adafruit_MotorHAT(addr=0x60)
     #mhArm = Adafruit_MotorHAT(addr=0x61)
 
+# Note if you'd like more debug output you can instead run:
+#pwm = PWM(0x40, debug=True)
+servoMin = [150, 150, 130]  # Min pulse length out of 4096
+servoMax = [600, 600, 270]  # Max pulse length out of 4096
+armServo = [300, 300, 300]
+
+#def setMotorsToIdle():
+#    s = 65
+#    for i in range(1, 2):
+#        mh.getMotor(i).setSpeed(s)
+#        mh.getMotor(i).run(Adafruit_MotorHAT.FORWARD)
+
+# Unused?
+def setServoPulse(channel, pulse):
+    pulseLength = 1000000                   # 1,000,000 us per second
+    pulseLength /= 60                       # 60 Hz
+    print "%d us per period" % pulseLength
+    pulseLength /= 4096                     # 12 bits of resolution
+    print "%d us per bit" % pulseLength
+    pulse *= 1000
+    pulse /= pulseLength
+    pwm.setPWM(channel, 0, pulse)
+
+def incrementArmServo(channel, amount):
+
+    armServo[channel] += amount
+
+    print "arm servo positions:", armServo
+
+    if armServo[channel] > servoMax[channel]:
+        armServo[channel] = servoMax[channel]
+    if armServo[channel] < servoMin[channel]:
+        armServo[channel] = servoMin[channel]
+    pwm.setPWM(channel, 0, armServo[channel])
 
 def turnOffMotors():
     mh.getMotor(1).run(Adafruit_MotorHAT.RELEASE)
@@ -50,6 +87,13 @@ if motorsEnabled:
     motorA = mh.getMotor(1)
     motorB = mh.getMotor(2)
 
+# true if it's on the charger and it needs to be charging
+def isCharging():
+    if chargeValue < 99:
+        return GPIO.input(chargeIONumber) == 1
+    else:
+        return False
+
 def sendChargeState():
     charging = isCharging()
     chargeState = {'robot_id': robotID, 'charging': charging}
@@ -64,7 +108,13 @@ if commandArgs.type == 'motor_hat':
     GPIO.add_event_callback(chargeIONumber, sendChargeStateCallback)
 
 class MotorHat:
-    def __init__(self):
+    def __init__(self, forward, backward, left, right, straightDelay, turnDelay):
+        self.forward = forward
+        self.backward = backward
+        self.left = left
+        self.right = right
+        self.straightDelay = straightDelay
+        self.turnDelay = turnDelay
 
         # todo: specificity is not correct, this is specific to a bot with a claw, not all motor_hat based bots
         from Adafruit_PWM_Servo_Driver import PWM
@@ -75,30 +125,41 @@ class MotorHat:
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(chargeIONumber, GPIO.IN)
 
+        self.sendChargeState = sendChargeState
+
     def run(self, command):
+        now = datetime.datetime.now()
+        now_time = now.time()
+        # if it's late, make the robot slower
+        if now_time >= datetime.time(21,30) or now_time <= datetime.time(9,30):
+            #print "within the late time interval"
+            drivingSpeedActuallyUsed = nightTimeDrivingSpeedActuallyUsed
+        else:
+            drivingSpeedActuallyUsed = dayTimeDrivingSpeedActuallyUsed
+
         if motorsEnabled:
             motorA.setSpeed(drivingSpeed)
             motorB.setSpeed(drivingSpeed)
             if command == 'F':
                 drivingSpeed = drivingSpeedActuallyUsed
                 for motorIndex in range(4):
-                    runMotor(motorIndex, forward[motorIndex])
-                time.sleep(straightDelay)
+                    runMotor(motorIndex, self.forward[motorIndex])
+                time.sleep(self.straightDelay)
             elif command == 'B':
                 drivingSpeed = drivingSpeedActuallyUsed
                 for motorIndex in range(4):
-                    runMotor(motorIndex, backward[motorIndex])
-                time.sleep(straightDelay)
+                    runMotor(motorIndex, self.backward[motorIndex])
+                time.sleep(self.straightDelay)
             elif command == 'L':
                 drivingSpeed = turningSpeedActuallyUsed
                 for motorIndex in range(4):
-                    runMotor(motorIndex, left[motorIndex])
-                time.sleep(turnDelay)
+                    runMotor(motorIndex, self.left[motorIndex])
+                time.sleep(self.turnDelay)
             elif command == 'R':
                 drivingSpeed = turningSpeedActuallyUsed
                 for motorIndex in range(4):
-                    runMotor(motorIndex, right[motorIndex])
-                time.sleep(turnDelay)
+                    runMotor(motorIndex, self.right[motorIndex])
+                time.sleep(self.turnDelay)
             elif command == 'U':
                 #mhArm.getMotor(1).setSpeed(127)
                 #mhArm.getMotor(1).run(Adafruit_MotorHAT.BACKWARD)
