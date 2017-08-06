@@ -1,5 +1,5 @@
 import RPi.GPIO as GPIO
-
+from motor import Motor
 # Motor1 is back left
 # Motor1A is reverse
 # Motor1B is forward
@@ -28,7 +28,7 @@ Motor4A = 13
 Motor4B = 18
 Motor4Enable = 25
 
-class MotoZero:
+class MotoZero(Motor):
 
     def __init__(self):
         GPIO.cleanup()

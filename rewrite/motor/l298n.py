@@ -1,11 +1,11 @@
 import RPi.GPIO as GPIO
-
+from motor import Motor
 #Change sleeptime to adjust driving speed
 #Change rotatetimes to adjust the rotation. Will be multiplicated with sleeptime.
 l298n_sleeptime=0.2
 l298n_rotatetimes=5
 
-class L298N:
+class L298N(Motor):
 
     def __init__(self):
         try:

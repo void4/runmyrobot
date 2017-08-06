@@ -1,6 +1,7 @@
 import gopigo
+from motor import Motor
 
-class GoPiGo2:
+class GoPiGo2(Motor):
     def __init__(self):
 
     def run(self, command):
