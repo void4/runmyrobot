@@ -248,7 +248,7 @@ def identifyRobotId():
     socketIO.emit('identify_robot_id', commandArgs.robot_id);
 
 lastInternetStatus = False
-chargeCheckInterval = 1
+chargeCheckInterval = 5
 everyChargeCheck = Every(chargeCheckInterval)
 every10 = Every(10)
 every60 = Every(60)
@@ -256,8 +256,10 @@ every1000 = Every(1000)
 
 while True:
 
-    #if motor and everyChargeCheck:
-    #    motor.updateChargeApproximation()
+    #if everyChargeCheck:
+        #if commandArgs.type == 'motor_hat':
+        #    motor.sendChargeState()
+        #    motor.updateChargeApproximation()
 
     if every10:
         if commandArgs.auto_wifi:
@@ -272,8 +274,7 @@ while True:
             socketIO.emit('ip_information',
                       {'ip': subprocess.check_output(["hostname", "-I"]), 'robot_id': commandArgs.robot_id})
 
-        #if commandArgs.type == 'motor_hat':
-        #    motor.sendChargeState()
+
 
     if every1000:
         internetStatus = net.isInternetConnected()

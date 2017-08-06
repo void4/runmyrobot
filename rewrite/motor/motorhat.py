@@ -9,8 +9,8 @@ from ..utils import Every
 from motor import Motor
 
 chargeValue = 0.0
-secondsToCharge = 60 * 2
-secondsToDischarge = 60 * 3
+secondsToCharge = 60 * 60 * 3
+secondsToDischarge = 60 * 60 * 10
 
 
 chargeIONumber = 17
@@ -102,9 +102,12 @@ if motorsEnabled:
 
 # true if it's on the charger and it needs to be charging
 def isCharging():
+    print("is charging current value", chargeValue)
     if chargeValue < 99:
+        print("Charge value is low")
         return GPIO.input(chargeIONumber) == 1
     else:
+        print("Charge value is high")
         return False
 
 def sendChargeState():
@@ -204,7 +207,7 @@ class MotorHat(Motor):
     def updateChargeApproximation(self):
 
         username = getpass.getuser()
-        path = "/tmp/charge_state_%s.txt" % username
+        path = "/home/pi/charge_state_%s.txt" % username
 
         # read charge value
         # assume it is zero if no file exists
@@ -213,12 +216,13 @@ class MotorHat(Motor):
             chargeValue = float(file.read())
             file.close()
         else:
+            print("Setting charge value to zero")
             chargeValue = 0
 
         chargePerSecond = 1.0 / secondsToCharge
         dischargePerSecond = 1.0 / secondsToDischarge
 
-        if isCharging():
+        if GPIO.input(chargeIONumber) == 1:
             chargeValue += 100.0 * chargePerSecond * chargeCheckInterval
         else:
             chargeValue -= 100.0 * dischargePerSecond * chargeCheckInterval
