@@ -5,18 +5,18 @@ from motor import Motor
 l298n_sleeptime=0.2
 l298n_rotatetimes=5
 
+try:
+    import configparser
+except ImportError:
+    print "You need to install configparser (sudo python -m pip install configparser)\n Ctrl-C to quit"
+    exit()
+
 class L298N(Motor):
 
     def __init__(self):
-        try:
-            import configparser
-        except ImportError:
-            print "You need to install configparser (sudo python -m pip install configparser)\n Ctrl-C to quit"
-            while True:
-                pass # Halt program	to avoid error down the line.
 
         mode = GPIO.getmode()
-        print " mode = "+str(mode)
+        print("mode = %s" % str(mode))
         GPIO.cleanup()
         #Change the GPIO Pins to your connected motors in gpio.conf
         #visit http://bit.ly/1S5nQ4y for reference
