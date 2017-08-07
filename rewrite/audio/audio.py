@@ -9,7 +9,7 @@ class Audio:
             os.system("amixer set PCM -- -100")
 
         # tested for USB audio device
-        os.system("amixer -c 2 cset numid=3 %d%%" % self.tts_volume)
+        #os.system("amixer -c 2 cset numid=3 %d%%" % self.tts_volume)
 
     def changeVolumeHighThenNormal(self):
 
