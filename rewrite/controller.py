@@ -57,7 +57,11 @@ print(commandArgs)
 modules = []
 
 def add(module):
-    modules.append(module)
+    global modules
+    if isinstance(module, list):
+        modules += module
+    else:
+        modules.append(module)
 
 if commandArgs.type == 'none':
     #from motor.motor import Motor
@@ -143,8 +147,10 @@ def handle_exclusive_control(args):
 
         if status == 'start':
                 print "start exclusive control"
-        if status == 'end':
+        elif status == 'end':
                 print "end exclusive control"
+        else:
+            print("exclusive control: ", args)
 
 def handle_chat_message(args):
 
@@ -298,8 +304,15 @@ def loop():
 
     socketIO.wait(seconds=0.5)
 
-def run(robotID):
-    commandArgs.robot_id = robotID
+def run(robotID=None):
+    global commandArgs
+    if robotID is None:
+        print("I need a robot id!")
+        print("RunMyRobot.run(<robotID>)")
+        exit()
+    commandArgs.robot_id = str(robotID)
+    print("RobotID is %s" % commandArgs.robot_id)
+    print("Setting up connection to server...")
     setup()
     while True:
         loop()
