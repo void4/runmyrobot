@@ -304,16 +304,24 @@ def loop():
 
     socketIO.wait(seconds=0.5)
 
-def run(robotID=None):
+def run(robotID=None, config=None):
     global commandArgs
+    
     if robotID is None:
         print("I need a robot id!")
         print("RunMyRobot.run(<robotID>)")
         exit()
     commandArgs.robot_id = str(robotID)
+
     print("RobotID is %s" % commandArgs.robot_id)
+
+    if config is not None:
+        add(config)
+
     print("Setting up connection to server...")
     setup()
+
+    print("Entering main loop.")
     while True:
         loop()
 

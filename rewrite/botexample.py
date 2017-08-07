@@ -4,8 +4,11 @@ import controller
 #from motor.motor import DummyMotor
 #controller.add(DummyMotor())
 
-# Importing an full configured collection of command handling modules
+# Importing and running a full configured collection of command handling modules
 from configexample import config
-controller.add(config)
 
-controller.run(33583635)
+controller.run(33583635, config)
+
+# Alternative syntax
+#controller.add(config)
+#controller.run(33583635)
