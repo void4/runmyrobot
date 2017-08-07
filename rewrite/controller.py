@@ -6,6 +6,12 @@ import argparse
 import thread
 import subprocess
 
+from socketIO_client import SocketIO, LoggingNamespace
+
+from net import net
+from utils import Every, watchdog, times
+from audio.audio import Audio
+
 parser = argparse.ArgumentParser(description='start robot control program')
 parser.add_argument('robot_id', help='Robot ID')
 
@@ -40,47 +46,26 @@ parser.add_argument('--auto-wifi', dest='auto_wifi', action='store_true')
 parser.set_defaults(auto_wifi=False)
 parser.add_argument('--secret-key', default=None)
 
-commandArgs = parser.parse_args()
-print(commandArgs)
-
-from socketIO_client import SocketIO, LoggingNamespace
-
-from net import net
-from utils import Every, watchdog, times
-from audio.audio import Audio
-
-watchdog()
-audio = Audio(commandArgs.tts_volume)
-
-server = "runmyrobot.com"
-#server = "52.52.213.92"
-
-if commandArgs.env == 'dev':
-    print('DEV MODE ***************')
-    print("using dev port 8122")
-    port = 8122
-elif commandArgs.env == 'prod':
-    print('PROD MODE *************')
-    print("using prod port 8022")
-    port = 8022
+if __name__ == "__main__":
+    commandArgs = parser.parse_args()
 else:
-    print("invalid environment")
-    sys.exit(0)
-
-print('using socket io to connect to', server)
-socketIO = SocketIO(server, port, LoggingNamespace)
-print('finished using socket io to connect to', server)
+    commandArgs = parser.parse_args("0 --type none".split())
+print(commandArgs)
 
 # motor controller specific intializations
 
 modules = []
 
+def add(module):
+    modules.append(module)
+
 if commandArgs.type == 'none':
-    from motor.motor import Motor
-    modules.append(Motor())
+    #from motor.motor import Motor
+    #modules.append(Motor())
+    pass
 elif commandArgs.type == "dummy":
     from motor.motor import DummyMotor
-    modules.append(DummyMotor())
+    add(DummyMotor())
 elif commandArgs.type == 'motor_hat':
     from motor.motorhat import MotorHat
     forward = json.loads(commandArgs.forward)
@@ -89,64 +74,66 @@ elif commandArgs.type == 'motor_hat':
     right = times(left, -1)
     straightDelay = commandArgs.straight_delay
     turnDelay = commandArgs.turn_delay
-    modules.append(MotorHat(commandArgs.driving_speed, commandArgs.day_speed, commandArgs.night_speed, forward, backward, left, right, straightDelay, turnDelay))
+    add(MotorHat(commandArgs.driving_speed, commandArgs.day_speed, commandArgs.night_speed, forward, backward, left, right, straightDelay, turnDelay))
 elif commandArgs.type == 'gopigo2':
     from motor.gopigo2 import GoPiGo2
-    modules.append(GoPiGo2())
+    add(GoPiGo2())
 elif commandArgs.type == 'gopigo3':
     from motor.gopigo3 import GoPiGo3
-    modules.append(GoPiGo3())
+    add(GoPiGo3())
 elif commandArgs.type == 'l298n':
     from motor.l298n import L298N
-    modules.append(L298N())
+    add(L298N())
 elif commandArgs.type == 'motozero':
     from motor.motozero import MotoZero
-    modules.append(MotoZero())
+    add(MotoZero())
 elif commandArgs.type == 'pololu':
     from motor.pololu import Pololu
-    modules.append(Pololu())
+    add(Pololu())
 elif commandArgs.type == 'screencap':
     pass
 elif commandArgs.type == 'adafruit_pwm':
     from motor.adafruitpwm import AdafruitPWM
-    modules.append(AdafruitPWM())
+    add(AdafruitPWM())
 elif commandArgs.type == 'serial':
     from motor.motorserial import Serial
-    modules.append(Serial(commandArgs.serial_device))
+    add(Serial(commandArgs.serial_device))
 else:
     print "invalid --type in command line"
     exit(0)
-
-uistring = [{"button_panels": []}]
-
-responses = []
-for module in modules:
-    response = module.ui()
-
-    if not response:
-        continue
-    elif isinstance(response, str):
-        response = json.loads(response)
-    elif not isinstance(response, dict):
-        print("Module", module, "returned invalid response")
-        continue
-
-    responses.append(response)
-
-from ui import setCustomUI
-if responses:
-    uistring[0]["button_panels"] += responses
-    print(uistring)
-    setCustomUI(commandArgs.robot_id, uistring)
 
 #LED controlling
 if commandArgs.led == 'max7219':
     from led.max7219 import Max7219
     led = Max7219()
     led.off()
-    modules.append(led)
+    add(led)
 elif commandArgs.led is not None:
     print("%s not yet supported!" % commandArgs.led)
+
+
+def setUI():
+    uistring = [{"button_panels": []}]
+
+    responses = []
+    for module in modules:
+        response = module.ui()
+
+        if not response:
+            continue
+        elif isinstance(response, str):
+            response = json.loads(response)
+        elif not isinstance(response, dict):
+            print("Module", module, "returned invalid response")
+            continue
+
+        responses.append(response)
+
+    from ui import setCustomUI
+    if responses:
+        uistring[0]["button_panels"] += responses
+        print(uistring)
+        setCustomUI(commandArgs.robot_id, uistring)
 
 handlingCommand = False
 
@@ -158,13 +145,6 @@ def handle_exclusive_control(args):
                 print "start exclusive control"
         if status == 'end':
                 print "end exclusive control"
-
-if commandArgs.festival_tts:
-    from tts.festival import Festival
-    tts = Festival()
-else:
-    from tts.espeak import Espeak
-    tts = Espeak()
 
 def handle_chat_message(args):
 
@@ -231,21 +211,52 @@ def on_handle_exclusive_control(*args):
 def on_handle_chat_message(*args):
    thread.start_new_thread(handle_chat_message, args)
 
-socketIO.on('command_to_robot', on_handle_command)
-socketIO.on('exclusive_control', on_handle_exclusive_control)
-socketIO.on('chat_message_with_name', on_handle_chat_message)
-
 def startReverseSshProcess(*args):
    thread.start_new_thread(handleStartReverseSshProcess, args)
 
 def endReverseSshProcess(*args):
    thread.start_new_thread(handleEndReverseSshProcess, args)
 
-socketIO.on('reverse_ssh_8872381747239', startReverseSshProcess)
-socketIO.on('end_reverse_ssh_8872381747239', endReverseSshProcess)
-
 def identifyRobotId():
     socketIO.emit('identify_robot_id', commandArgs.robot_id);
+
+def setup():
+    global socketIO, tts, server, port
+    watchdog()
+    audio = Audio(commandArgs.tts_volume)
+
+    server = "runmyrobot.com"
+    #server = "52.52.213.92"
+
+    if commandArgs.env == 'dev':
+        print('DEV MODE ***************')
+        print("using dev port 8122")
+        port = 8122
+    elif commandArgs.env == 'prod':
+        print('PROD MODE *************')
+        print("using prod port 8022")
+        port = 8022
+    else:
+        print("invalid environment")
+        sys.exit(0)
+
+    print('using socket io to connect to', server)
+    socketIO = SocketIO(server, port, LoggingNamespace)
+    print('finished using socket io to connect to', server)
+
+    if commandArgs.festival_tts:
+        from tts.festival import Festival
+        tts = Festival()
+    else:
+        from tts.espeak import Espeak
+        tts = Espeak()
+
+    socketIO.on('command_to_robot', on_handle_command)
+    socketIO.on('exclusive_control', on_handle_exclusive_control)
+    socketIO.on('chat_message_with_name', on_handle_chat_message)
+
+    socketIO.on('reverse_ssh_8872381747239', startReverseSshProcess)
+    socketIO.on('end_reverse_ssh_8872381747239', endReverseSshProcess)
 
 lastInternetStatus = False
 chargeCheckInterval = 5
@@ -254,7 +265,7 @@ every10 = Every(10)
 every60 = Every(60)
 every1000 = Every(1000)
 
-while True:
+def loop():
 
     #if everyChargeCheck:
         #if commandArgs.type == 'motor_hat':
@@ -286,3 +297,12 @@ while True:
         lastInternetStatus = internetStatus
 
     socketIO.wait(seconds=0.5)
+
+def run(robotID):
+    commandArgs.robot_id = robotID
+    setup()
+    while True:
+        loop()
+
+if __name__ == "__main__":
+    run(commandArgs.robot_id)
