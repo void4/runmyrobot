@@ -4,11 +4,14 @@ from motor import Motor
 class AdafruitPWM(Motor):
     def __init__(self):
         # Initialise the PWM device
-        pwm = PWM(0x40)
-        pwm.setPWMFreq(60)
+        self.pwm = PWM(0x40)
+        self.pwm.setPWMFreq(60)
 
     def run(self, command):
-        print "move adafruit pwm command", command
+
+        print("move adafruit pwm command", command)
+
+        pwm = self.pwm
 
         if command == 'L':
             pwm.setPWM(1, 0, 300) # turn left
