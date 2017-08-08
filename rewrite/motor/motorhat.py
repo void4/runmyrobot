@@ -1,6 +1,7 @@
 import datetime
 import atexit
 import getpass
+import time
 import os
 
 import RPi.GPIO as GPIO

@@ -2,6 +2,7 @@ import sys
 sys.path.append("/home/pi/Dexter/GoPiGo3/Software/Python")
 import easygopigo3
 from motor import Motor
+import time
 easyGoPiGo3 = easygopigo3.EasyGoPiGo3()
 
 class GoPiGo3(Motor):

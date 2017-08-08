@@ -1,4 +1,5 @@
 from motor import Motor
+import time
 
 try:
     from pololu_drv8835_rpi import motors, MAX_SPEED

@@ -1,3 +1,4 @@
+import time
 import RPi.GPIO as GPIO
 from motor import Motor
 # Motor1 is back left

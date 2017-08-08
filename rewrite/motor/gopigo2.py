@@ -1,5 +1,6 @@
 import gopigo
 from motor import Motor
+import time
 
 class GoPiGo2(Motor):
     def __init__(self):
