@@ -3,6 +3,7 @@ from motor import Motor
 
 class GoPiGo2(Motor):
     def __init__(self):
+        pass
 
     def run(self, command):
         if command == 'L':
